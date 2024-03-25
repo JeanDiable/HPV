@@ -2,7 +2,7 @@
 Author: Suizhi HUANG && sunrisen.huang@gmail.com
 Date: 2024-03-25 15:38:44
 LastEditors: Suizhi HUANG && sunrisen.huang@gmail.com
-LastEditTime: 2024-03-25 19:28:04
+LastEditTime: 2024-03-25 21:17:04
 FilePath: /HPV/main.py
 Description: 
 Copyright (c) 2024 by $Suizhi HUANG, All Rights Reserved. 
@@ -37,6 +37,7 @@ def main(
     optimizer,
     scheduler=None,
     test_intervals=5,
+    balance=0,
 ):
     best_sens = 0
     for _ in range(epochs):
@@ -65,13 +66,13 @@ def main(
             # Find negative samples
             neg_indices = torch.where(label == 0)[0]
             neg_samples = pred[neg_indices]
-            # Randomly match negative samples with positive samples
-            pos_indices_matched = torch.randint(
-                0, len(pos_indices), size=(len(neg_indices),)
-            )
-            pos_samples = pos_samples[pos_indices_matched]
-            # replicate positive samples to match negative samples, while make sure the idx is in the range of negative samples
-            # pos_samples = pos_samples.repeat(len(neg_indices) // len(pos_indices) + 1)
+
+            if balance != 1:
+                # Randomly match negative samples with positive samples
+                pos_indices_matched = torch.randint(
+                    0, len(pos_indices), size=(len(neg_indices),)
+                )
+                pos_samples = pos_samples[pos_indices_matched]
 
             # Calculate loss
             loss = criterion(pos_samples, neg_samples)
@@ -115,15 +116,10 @@ def evaluate(model, valid_loader, device, logger, path, best_sens):
     accuracy = get_accuracy_score(valid_labels, valid_preds)
     sensitivity_score = get_sensitive_score(valid_labels, valid_preds)
     specificity_score = get_specificity_score(valid_labels, valid_preds)
-    if sensitivity_score > best_sens:
-        best_sens = sensitivity_score
-        torch.save(model.state_dict(), path)
-    logger.info(
-        'Current sensitivity: %.6f, Best sensitivity: %.6f\n'
-        % (sensitivity_score, best_sens)
-    )
-    logger.info('Current acc: %.6f' % (accuracy))
-    logger.info('Current specificity: %.6f' % (specificity_score))
+    torch.save(model.state_dict(), path)
+    logger.info('Current sensitivity: %.6f\n' % (sensitivity_score))
+    logger.info('Current acc: %.6f\n' % (accuracy))
+    logger.info('Current specificity: %.6f\n' % (specificity_score))
 
 
 def set_seed(seed=2024):
@@ -132,7 +128,8 @@ def set_seed(seed=2024):
     torch.cuda.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
     torch.backends.cudnn.deterministic = True
-    torch.backends.cudnn.benchmark = False
+    torch.backends.cudnn.enable = True
+    torch.backends.cudnn.benchmark = True
 
 
 if __name__ == '__main__':
@@ -177,13 +174,16 @@ if __name__ == '__main__':
     model.to(device)
 
     criterion = BPRLoss().to(device)
-    optimizer = optim.Adam(model.parameters(), lr=0.0005, weight_decay=0.001)
+    optimizer = optim.Adam(model.parameters(), lr=args.lr, weight_decay=0.001)
     # scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=1, gamma=0.8)
 
     path = os.path.join("./exp/", args.exp)
     os.makedirs(path, exist_ok=True)
     logger = get_logger(path)
     logger.info('Start training ...')
+    logger.info(f'balance: {args.balance}')
+    logger.info(f'batch_size: {args.batch_size}')
+    logger.info(f'learning_rate: {args.lr}')
     main(
         model,
         train_loader,

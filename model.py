@@ -2,7 +2,7 @@
 Author: Suizhi HUANG && sunrisen.huang@gmail.com
 Date: 2024-03-25 15:39:01
 LastEditors: Suizhi HUANG && sunrisen.huang@gmail.com
-LastEditTime: 2024-03-25 18:08:22
+LastEditTime: 2024-03-25 19:46:59
 FilePath: /HPV/model.py
 Description: 
 Copyright (c) 2024 by $Suizhi HUANG, All Rights Reserved. 
@@ -72,6 +72,7 @@ class DeepFM(nn.Module):
         """
 
         """FM 一阶部分"""
+        # print(X_sparse.shape)
         fm_1st_sparse_res = [
             emb(X_sparse[:, i].unsqueeze(1)).view(-1, 1)
             for i, emb in enumerate(self.fm_1st_order_sparse_emb)

@@ -2,7 +2,7 @@
 Author: Suizhi HUANG && sunrisen.huang@gmail.com
 Date: 2024-03-25 15:43:05
 LastEditors: Suizhi HUANG && sunrisen.huang@gmail.com
-LastEditTime: 2024-03-25 18:47:58
+LastEditTime: 2024-03-25 19:55:12
 FilePath: /HPV/utils.py
 Description: 
 Copyright (c) 2024 by $Suizhi HUANG, All Rights Reserved. 
@@ -22,6 +22,7 @@ def parse_opts():
     parser.add_argument(
         '--sparse_feature_num', default=62, type=int, help='Number of sparse features'
     )
+    parser.add_argument("--lr", default=0.001, type=float, help="Learning rate")
     parser.add_argument(
         '--dense_feature_num', default=0, type=int, help='Number of dense features'
     )

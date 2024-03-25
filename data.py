@@ -2,7 +2,7 @@
 Author: Suizhi HUANG && sunrisen.huang@gmail.com
 Date: 2024-03-25 15:41:40
 LastEditors: Suizhi HUANG && sunrisen.huang@gmail.com
-LastEditTime: 2024-03-25 19:29:13
+LastEditTime: 2024-03-25 19:53:36
 FilePath: /HPV/data.py
 Description: 
 Copyright (c) 2024 by $Suizhi HUANG, All Rights Reserved. 
@@ -14,6 +14,7 @@ import time
 
 import numpy as np
 import pandas as pd
+import torch
 from sklearn.preprocessing import LabelEncoder
 from tqdm import tqdm
 
@@ -34,7 +35,12 @@ def get_data(file_path, sparse_num, dense_num, balance):
     data = data.sample(frac=1)
     target = ['label']
 
-    ## 类别特征labelencoder
+    if balance > 0:
+        print(data.shape)
+        data = balance_data(data, balance)
+        print(data.shape)
+
+        ## 类别特征labelencoder
     for feat in tqdm(sparse_features):
         lbe = LabelEncoder()
         data[feat] = lbe.fit_transform(data[feat])
@@ -45,15 +51,11 @@ def get_data(file_path, sparse_num, dense_num, balance):
         std = data[feat].std()
         data[feat] = (data[feat] - mean) / (std + 1e-12)  # 防止除零
 
-    if balance > 0:
-        print(type(data))
-        data = balance_data(data, balance)
-        print(type(data))
-
     return data, dense_features, sparse_features
 
 
 def balance_data(data, balance):
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     positive_samples = data[data['label'] == 1]
     num_positive_samples = len(positive_samples)
     negative_samples = data[data['label'] == 0]
@@ -63,14 +65,12 @@ def balance_data(data, balance):
     # num_positive_samples = balance * unit
     num_negative_samples = balance * unit
 
-    # # Replicate positive samples to balance the number of positive and negative samples
-    positive_samples = positive_samples.sample(n=num_positive_samples, replace=True)
-    # Reduce the number of negative samples to match the number of positive samples
-    negative_samples = negative_samples.sample(n=num_negative_samples)
+    positive_samples = positive_samples.sample(
+        n=int(num_positive_samples), replace=True
+    )
+    negative_samples = negative_samples.sample(n=int(num_negative_samples))
 
-    # Combine the replicated positive samples and reduced negative samples
     balanced_data = pd.concat([positive_samples, negative_samples])
-    # Shuffle the data
     balanced_data = balanced_data.sample(frac=1)
 
     return balanced_data
