@@ -2,27 +2,22 @@
 Author: Suizhi HUANG && sunrisen.huang@gmail.com
 Date: 2024-03-25 15:38:44
 LastEditors: Suizhi HUANG && sunrisen.huang@gmail.com
-LastEditTime: 2024-03-25 17:00:06
+LastEditTime: 2024-03-25 19:28:04
 FilePath: /HPV/main.py
 Description: 
 Copyright (c) 2024 by $Suizhi HUANG, All Rights Reserved. 
 '''
 
-import datetime
-import json
 import os
 import time
 
 import numpy as np
-import pandas as pd
 import torch
-import torch.nn as nn
-import torch.nn.functional as F
 import torch.optim as optim
 import torch.utils.data as Data
-from sklearn.metrics import accuracy_score, log_loss, roc_auc_score
+
+# from sklearn.metrics import accuracy_score, log_loss, roc_auc_score
 from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import LabelEncoder
 from tqdm import tqdm
 
 from data import get_data
@@ -40,9 +35,10 @@ def main(
     logger,
     criterion,
     optimizer,
-    scheduler,
+    scheduler=None,
     test_intervals=5,
 ):
+    best_sens = 0
     for _ in range(epochs):
         """训练部分"""
         model.train()
@@ -63,24 +59,22 @@ def main(
             )
             pred = model(cate_fea, None).view(-1)
 
-            # Find negative samples
-            neg_indices = torch.where(label == 0)[0]
-            neg_samples = pred[neg_indices]
-
             # Find positive samples
             pos_indices = torch.where(label == 1)[0]
             pos_samples = pred[pos_indices]
-
+            # Find negative samples
+            neg_indices = torch.where(label == 0)[0]
+            neg_samples = pred[neg_indices]
             # Randomly match negative samples with positive samples
-            neg_indices_matched = torch.randint(
+            pos_indices_matched = torch.randint(
                 0, len(pos_indices), size=(len(neg_indices),)
             )
-            neg_samples_matched = pos_samples[neg_indices_matched]
+            pos_samples = pos_samples[pos_indices_matched]
             # replicate positive samples to match negative samples, while make sure the idx is in the range of negative samples
-            pos_samples = pos_samples.repeat(len(neg_indices) // len(pos_indices) + 1)
+            # pos_samples = pos_samples.repeat(len(neg_indices) // len(pos_indices) + 1)
 
             # Calculate loss
-            loss = criterion(pos_samples, neg_samples_matched)
+            loss = criterion(pos_samples, neg_samples)
 
             optimizer.zero_grad()
             loss.backward()
@@ -97,26 +91,30 @@ def main(
                         time.time() - start_time,
                     )
                 )
-        scheduler.step()
+        # scheduler.step()
 
         if (_ + 1) % test_intervals == 0:
-            evaluate(model, valid_loader, device, logger, path + "/best.pth")
+            evaluate(model, valid_loader, device, logger, path + "/best.pth", best_sens)
 
 
-def evaluate(model, valid_loader, device, logger, path):
+def evaluate(model, valid_loader, device, logger, path, best_sens):
     model.eval()
-    best_sens = 0
     with torch.no_grad():
         valid_labels, valid_preds = [], []
         for idx, x in tqdm(enumerate(valid_loader)):
             cate_fea, nume_fea, label = x[0], x[1], x[2]
             cate_fea, nume_fea = cate_fea.to(device), nume_fea.to(device)
-            pred = model(cate_fea, nume_fea).reshape(-1).data.cpu().numpy().tolist()
+            pred = model(cate_fea, None).reshape(-1).data.cpu().numpy().tolist()
             valid_preds.extend(pred)
+            # change label into binary targets
             valid_labels.extend(label.cpu().numpy().tolist())
-    accuracy = accuracy_score(valid_labels, valid_preds)
-    sensitivity_score = recall_score(valid_labels, valid_preds)
-    specificity_score = recall_score(valid_labels, valid_preds, pos_label=0)
+    # print(type(valid_labels[0]), type(valid_preds[0]))
+    # print(valid_labels[:5], valid_preds[:5])
+    valid_labels = np.array(valid_labels)
+    valid_preds = np.array(valid_preds)
+    accuracy = get_accuracy_score(valid_labels, valid_preds)
+    sensitivity_score = get_sensitive_score(valid_labels, valid_preds)
+    specificity_score = get_specificity_score(valid_labels, valid_preds)
     if sensitivity_score > best_sens:
         best_sens = sensitivity_score
         torch.save(model.state_dict(), path)
@@ -142,7 +140,7 @@ if __name__ == '__main__':
     set_seed()
 
     data, dense_features, sparse_features = get_data(
-        args.train_file, args.sparse_feature_num, args.dense_feature_num
+        args.train_file, args.sparse_feature_num, args.dense_feature_num, args.balance
     )
 
     train, valid = train_test_split(data, test_size=0.2, random_state=2020)
@@ -168,7 +166,7 @@ if __name__ == '__main__':
     valid_loader = Data.DataLoader(
         dataset=valid_dataset,
         batch_size=args.batch_size,
-        shuffle=False,
+        shuffle=True,
         num_workers=args.num_workers,
     )
 
@@ -179,8 +177,8 @@ if __name__ == '__main__':
     model.to(device)
 
     criterion = BPRLoss().to(device)
-    optimizer = optim.Adam(model.parameters(), lr=0.005, weight_decay=0.001)
-    scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=1, gamma=0.8)
+    optimizer = optim.Adam(model.parameters(), lr=0.0005, weight_decay=0.001)
+    # scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=1, gamma=0.8)
 
     path = os.path.join("./exp/", args.exp)
     os.makedirs(path, exist_ok=True)
@@ -195,6 +193,6 @@ if __name__ == '__main__':
         logger,
         criterion,
         optimizer,
-        scheduler,
+        # scheduler,
         args.test_intervals,
     )

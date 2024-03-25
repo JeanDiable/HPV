@@ -2,7 +2,7 @@
 Author: Suizhi HUANG && sunrisen.huang@gmail.com
 Date: 2024-03-25 15:43:05
 LastEditors: Suizhi HUANG && sunrisen.huang@gmail.com
-LastEditTime: 2024-03-25 16:54:40
+LastEditTime: 2024-03-25 18:47:58
 FilePath: /HPV/utils.py
 Description: 
 Copyright (c) 2024 by $Suizhi HUANG, All Rights Reserved. 
@@ -13,7 +13,7 @@ import logging
 import os
 import time
 
-from sklearn.metrics import recall_score
+from sklearn.metrics import accuracy_score, recall_score
 
 
 def parse_opts():
@@ -25,6 +25,7 @@ def parse_opts():
     parser.add_argument(
         '--dense_feature_num', default=0, type=int, help='Number of dense features'
     )
+    parser.add_argument('--balance', default=0, type=int, help='Balance the dataset')
     parser.add_argument(
         '--train_file',
         default='./data/shuffled_hpv231229.csv',
@@ -45,7 +46,7 @@ def parse_opts():
         type=float,
         help='Initial learning rate (divided by 10 while training by lr scheduler)',
     )
-    parser.add_argument('--batch_size', default=32, type=int, help='Batch Size')
+    parser.add_argument('--batch_size', default=256, type=int, help='Batch Size')
     parser.add_argument(
         '--n_epochs', default=50, type=int, help='Number of total epochs to run'
     )
@@ -86,3 +87,18 @@ def get_logger(log_dir: str = None):
     logger.addHandler(handler2)
 
     return logger
+
+
+def get_accuracy_score(y_true, y_pred):
+    y_pred = (y_pred > 0.5).astype(int)
+    return accuracy_score(y_true, y_pred)
+
+
+def get_sensitive_score(y_true, y_pred):
+    y_pred = (y_pred > 0.5).astype(int)
+    return recall_score(y_true, y_pred)
+
+
+def get_specificity_score(y_true, y_pred):
+    y_pred = (y_pred > 0.5).astype(int)
+    return recall_score(y_true, y_pred, pos_label=0)
