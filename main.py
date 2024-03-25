@@ -2,7 +2,7 @@
 Author: Suizhi HUANG && sunrisen.huang@gmail.com
 Date: 2024-03-25 15:38:44
 LastEditors: Suizhi HUANG && sunrisen.huang@gmail.com
-LastEditTime: 2024-03-25 16:31:55
+LastEditTime: 2024-03-25 17:00:06
 FilePath: /HPV/main.py
 Description: 
 Copyright (c) 2024 by $Suizhi HUANG, All Rights Reserved. 
@@ -20,7 +20,6 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 import torch.utils.data as Data
-from log import get_logger
 from sklearn.metrics import accuracy_score, log_loss, roc_auc_score
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import LabelEncoder
@@ -32,7 +31,7 @@ from model import DeepFM
 from utils import *
 
 
-def train(
+def main(
     model,
     train_loader,
     valid_loader,
@@ -44,7 +43,6 @@ def train(
     scheduler,
     test_intervals=5,
 ):
-    best_auc = 0
     for _ in range(epochs):
         """训练部分"""
         model.train()
@@ -63,7 +61,7 @@ def train(
                 nume_fea.to(device),
                 label.float().to(device),
             )
-            pred = model(cate_fea, nume_fea).view(-1)
+            pred = model(cate_fea, None).view(-1)
 
             # Find negative samples
             neg_indices = torch.where(label == 0)[0]
@@ -78,6 +76,8 @@ def train(
                 0, len(pos_indices), size=(len(neg_indices),)
             )
             neg_samples_matched = pos_samples[neg_indices_matched]
+            # replicate positive samples to match negative samples, while make sure the idx is in the range of negative samples
+            pos_samples = pos_samples.repeat(len(neg_indices) // len(pos_indices) + 1)
 
             # Calculate loss
             loss = criterion(pos_samples, neg_samples_matched)
@@ -141,7 +141,9 @@ if __name__ == '__main__':
     args = parse_opts()
     set_seed()
 
-    data, dense_features, sparse_features = get_data(args.train_file)
+    data, dense_features, sparse_features = get_data(
+        args.train_file, args.sparse_feature_num, args.dense_feature_num
+    )
 
     train, valid = train_test_split(data, test_size=0.2, random_state=2020)
     print(train.shape, valid.shape)
@@ -151,14 +153,24 @@ if __name__ == '__main__':
         torch.FloatTensor(train[dense_features].values),
         torch.FloatTensor(train['label'].values),
     )
-    train_loader = Data.DataLoader(dataset=train_dataset, batch_size=256, shuffle=True)
+    train_loader = Data.DataLoader(
+        dataset=train_dataset,
+        batch_size=args.batch_size,
+        shuffle=True,
+        num_workers=args.num_workers,
+    )
 
     valid_dataset = Data.TensorDataset(
         torch.LongTensor(valid[sparse_features].values),
         torch.FloatTensor(valid[dense_features].values),
         torch.FloatTensor(valid['label'].values),
     )
-    valid_loader = Data.DataLoader(dataset=valid_dataset, batch_size=256, shuffle=False)
+    valid_loader = Data.DataLoader(
+        dataset=valid_dataset,
+        batch_size=args.batch_size,
+        shuffle=False,
+        num_workers=args.num_workers,
+    )
 
     device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
     print(device)
@@ -174,7 +186,7 @@ if __name__ == '__main__':
     os.makedirs(path, exist_ok=True)
     logger = get_logger(path)
     logger.info('Start training ...')
-    train(
+    main(
         model,
         train_loader,
         valid_loader,

@@ -2,13 +2,15 @@
 Author: Suizhi HUANG && sunrisen.huang@gmail.com
 Date: 2024-03-25 15:43:05
 LastEditors: Suizhi HUANG && sunrisen.huang@gmail.com
-LastEditTime: 2024-03-25 16:16:08
+LastEditTime: 2024-03-25 16:54:40
 FilePath: /HPV/utils.py
 Description: 
 Copyright (c) 2024 by $Suizhi HUANG, All Rights Reserved. 
 '''
 
 import argparse
+import logging
+import os
 import time
 
 from sklearn.metrics import recall_score
@@ -47,7 +49,6 @@ def parse_opts():
     parser.add_argument(
         '--n_epochs', default=50, type=int, help='Number of total epochs to run'
     )
-    parser.add_argument('--optimizer', default='adam', type=str, help='Optimizer.')
     parser.add_argument(
         '--test_intervals', default=5, type=int, help='Iteration for testing model'
     )
@@ -64,9 +65,24 @@ def get_parameter_number(model):
     return {'Total': total_num, 'Trainable': trainable_num}
 
 
-def sensitivity_score(y_pred, y):
-    sensitivity = recall_score(y, y_pred)
+def get_logger(log_dir: str = None):
+    logger = logging.getLogger(__name__)
 
+    logger.setLevel('INFO')
 
-def specificity_score(y_pred, y):
-    specificity = recall_score(y, y_pred, pos_label=0)
+    timestamp = time.strftime('%Y%m%d_%H%M%S', time.localtime())
+    filename = os.path.join(log_dir, f'exp_{timestamp}.log')
+
+    handler1 = logging.StreamHandler()
+    handler2 = logging.FileHandler(filename)
+
+    formatter = logging.Formatter(
+        "%(asctime)s, %(levelname)s: %(message)s", datefmt="%Y.%m.%d, %H:%M:%S"
+    )
+    handler1.setFormatter(formatter)
+    handler2.setFormatter(formatter)
+
+    logger.addHandler(handler1)
+    logger.addHandler(handler2)
+
+    return logger
